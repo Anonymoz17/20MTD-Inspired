@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Burst.Intrinsics;
@@ -5,6 +6,14 @@ using UnityEngine;
 
 public class PlayerAimWeapon : MonoBehaviour
 {
+    public event EventHandler<OnShootEventArgs> OnShoot;
+    public class OnShootEventArgs : EventArgs 
+    {
+        public Vector3 gunEndPointPosition;
+        public Vector3 shootPosition;
+    }
+
+    private Transform aimGunEndPointTransform;
     private Transform aimTransform;
     private Transform recoilTransform;
     private SpriteRenderer gunSprite;
@@ -26,6 +35,7 @@ public class PlayerAimWeapon : MonoBehaviour
         HandleGunRecoil();
     }
 
+    // Gun Points to Mouse
     private void HandleAiming()
     {
         Vector3 mousePos = Input.mousePosition;
@@ -46,6 +56,18 @@ public class PlayerAimWeapon : MonoBehaviour
         else
         {
             gunSprite.flipY = false;
+        }
+    }
+
+    private void HandleShooting()
+    {
+        if (Input.GetMouseButton(0))
+        {
+            OnShoot?.Invoke(this, new OnShootEventArgs){
+                gunEndPointPosition = aimGunEndPointTransform.position,
+
+
+            }
         }
     }
 
