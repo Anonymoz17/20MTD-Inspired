@@ -1,98 +1,105 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using Unity.Burst.Intrinsics;
 using UnityEngine;
 
 public class PlayerAimWeapon : MonoBehaviour
 {
     public event EventHandler<OnShootEventArgs> OnShoot;
-    public class OnShootEventArgs : EventArgs 
+
+    public class OnShootEventArgs : EventArgs
     {
         public Vector3 gunEndPointPosition;
         public Vector3 shootPosition;
     }
 
-    private Transform aimGunEndPointTransform;
-    private Transform aimTransform;
-    private Transform recoilTransform;
-    private SpriteRenderer gunSprite;
+    [SerializeField] private float recoilDuration = 0.1f;
+    [SerializeField] private float recoilAngle = 25f;
 
     private float recoilTimer = 0f;
-    private float recoilDuration = 0.1f; // How long the recoil lasts
-    [SerializeField]private float recoilAngle = 25f;
+
+    private Transform aimTransform;        // Object holding the gun
+    private Transform recoilTransform;     // The actual gun sprite (rotated for recoil)
+    private Transform aimGunEndPointTransform;
+    private SpriteRenderer gunSprite;
 
     private void Awake()
     {
         aimTransform = transform.Find("Aim");
-        gunSprite = aimTransform.Find("Gun").GetComponent<SpriteRenderer>();
         recoilTransform = aimTransform.Find("Gun");
+        aimGunEndPointTransform = aimTransform.Find("GunEndPointPosition");
+        gunSprite = recoilTransform.GetComponent<SpriteRenderer>();
     }
 
-    void Update()
+    private void Update()
     {
         HandleAiming();
         HandleGunRecoil();
+        HandleShooting();
     }
 
-    // Gun Points to Mouse
     private void HandleAiming()
     {
-        Vector3 mousePos = Input.mousePosition;
-        mousePos.z = Mathf.Abs(Camera.main.transform.position.z - aimTransform.position.z);
-        mousePos = Camera.main.ScreenToWorldPoint(mousePos);
+        // Get screen position of the gun (aimTransform)
+        Vector3 gunScreenPos = Camera.main.WorldToScreenPoint(aimTransform.position);
 
-        Vector2 direction = mousePos - aimTransform.position;
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        // Direction vector from gun to mouse in screen space
+        Vector2 screenDirection = (Vector2)(Input.mousePosition - gunScreenPos);
 
-        // Optional: Clamp to a range (like -90 to +90 degrees) if needed
-        aimTransform.rotation = Quaternion.Euler(0, 0, angle);
+        // Calculate angle in degrees
+        float angle = Mathf.Atan2(screenDirection.y, screenDirection.x) * Mathf.Rad2Deg;
 
-        // Flip Gun from right to left its left side
-        if (angle > 90 || angle < -90)
-        {
-            gunSprite.flipY = true;
-        }
-        else
-        {
-            gunSprite.flipY = false;
-        }
+        // Rotate the gun around the Z axis (local)
+        aimTransform.localRotation = Quaternion.Euler(0, 0, angle);
+
+        // Flip the gun sprite if aiming backwards
+        gunSprite.flipY = (angle > 90 || angle < -90);
     }
+
 
     private void HandleShooting()
     {
         if (Input.GetMouseButton(0))
         {
-            OnShoot?.Invoke(this, new OnShootEventArgs){
+            Vector3 mouseWorldPos = MousePos();
+            OnShoot?.Invoke(this, new OnShootEventArgs
+            {
                 gunEndPointPosition = aimGunEndPointTransform.position,
-
-
-            }
+                shootPosition = mouseWorldPos
+            });
         }
+    }
+
+    private Vector3 MousePos()
+    {
+        // Raycast mouse position onto same plane as player/gun (XZ)
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        Plane plane = new Plane(Vector3.up, aimTransform.position);
+
+        if (plane.Raycast(ray, out float distance))
+        {
+            return ray.GetPoint(distance);
+        }
+
+        return aimTransform.position;
     }
 
     private void HandleGunRecoil()
     {
-
-        // If mouse clicked, start recoil
         if (Input.GetMouseButtonDown(0))
         {
             recoilTimer = recoilDuration;
         }
 
-        // If in recoil state
         if (recoilTimer > 0)
         {
             recoilTimer -= Time.deltaTime;
-
             float appliedRecoilAngle = gunSprite.flipY ? -recoilAngle : recoilAngle;
-            recoilTransform.localRotation = Quaternion.Euler(0, 0, appliedRecoilAngle);
+
+            // Slight kickback in local X axis
+            recoilTransform.localRotation = Quaternion.Euler(appliedRecoilAngle, 0f, 0f);
         }
         else
         {
             recoilTransform.localRotation = Quaternion.identity;
         }
     }
-
-
 }
